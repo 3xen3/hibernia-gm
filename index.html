@@ -1,0 +1,132 @@
+<!doctype html>
+<html lang="tr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex,nofollow,noarchive,nosnippet,noimageindex">
+<meta name="referrer" content="no-referrer">
+<title>Hibernia GM Ekranı</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Alegreya+Sans:wght@400;500;700&family=Grenze:wght@600;700&display=swap">
+<style>
+:root{--bg:#E6EBE8;--leaf:#F7F9F7;--ink:#18201C;--muted:#55615A;--line:#C8D1CB;--moon:#A3262F;--moon-soft:#F6DADA;--ok:#2D7A4C;
+  --f-display:"Grenze","Palatino Linotype",Georgia,serif;--f-body:"Alegreya Sans","Segoe UI",system-ui,sans-serif;color-scheme:light}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#101412;--leaf:#191F1C;--ink:#E4E9E5;--muted:#97A39C;--line:#2D3732;--moon:#E46A63;--moon-soft:#3B1C1D;--ok:#6CC08F;color-scheme:dark}}
+:root[data-theme="dark"]{--bg:#101412;--leaf:#191F1C;--ink:#E4E9E5;--muted:#97A39C;--line:#2D3732;--moon:#E46A63;--moon-soft:#3B1C1D;--ok:#6CC08F;color-scheme:dark}
+*{box-sizing:border-box}
+html,body{margin:0;min-height:100%}
+body{background:var(--bg);color:var(--ink);font:16px/1.45 var(--f-body);display:grid;place-items:center;min-height:100vh;padding:24px 16px}
+.gate{width:100%;max-width:380px}
+.moon{width:56px;height:56px;border-radius:50%;background:radial-gradient(circle at 36% 34%,#e8858d 0,var(--moon) 46%,#5b1218 100%);box-shadow:0 0 0 6px var(--moon-soft);margin:0 0 18px}
+h1{font:700 40px/1 var(--f-display);margin:0;letter-spacing:.01em}
+.sub{margin:6px 0 26px;color:var(--muted);font-size:15px}
+form{background:var(--leaf);border:1px solid var(--line);border-radius:10px;padding:20px;display:flex;flex-direction:column;gap:14px}
+label{display:flex;flex-direction:column;gap:5px;font-size:13px;font-weight:500;color:var(--muted)}
+input{font:16px var(--f-body);color:var(--ink);background:var(--bg);border:1px solid var(--line);border-radius:6px;padding:10px 12px;width:100%}
+input:focus{outline:2px solid var(--moon);outline-offset:1px;border-color:transparent}
+button{font:600 16px var(--f-body);color:#fff;background:var(--moon);border:0;border-radius:6px;padding:11px 14px;cursor:pointer;margin-top:4px}
+button[disabled]{opacity:.6;cursor:progress}
+button.link{background:none;color:var(--muted);font:500 14px var(--f-body);padding:2px;margin:0;text-decoration:underline;text-underline-offset:3px}
+.msg{min-height:22px;margin:14px 2px 0;font-size:14px;color:var(--muted)}
+.msg.err{color:var(--moon)}
+.foot{margin-top:28px;font-size:12px;color:var(--muted)}
+[hidden]{display:none!important}
+</style>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
+<script src="config.js?v=9edff5f0e811"></script>
+</head>
+<body>
+<main class="gate">
+  <div class="moon" aria-hidden="true"></div>
+  <h1>Hibernia</h1>
+  <p class="sub">GM ekranı · yalnızca davetli hesap</p>
+  <form id="f" hidden autocomplete="on">
+    <label>E-posta<input type="email" id="em" name="email" autocomplete="username" required></label>
+    <label>Şifre<input type="password" id="pw" name="password" autocomplete="current-password" required></label>
+    <label id="pw2l" hidden>Şifre tekrar<input type="password" id="pw2" name="password2" autocomplete="new-password"></label>
+    <button id="go" type="submit">Giriş yap</button>
+    <button id="sw" type="button" class="link">İlk kez mi giriyorsun? Şifreni belirle</button>
+  </form>
+  <p class="msg" id="msg" role="status">Açılıyor…</p>
+  <p class="foot">Tüm hakları saklıdır. İçerik şifrelidir ve yalnızca yetkili hesapla açılır.</p>
+</main>
+<script>
+(function () {
+  "use strict";
+  var BUILD = "9edff5f0e811";
+  var SB_ALT = "https://unpkg.com/@supabase/supabase-js@2.117.3/dist/umd/supabase.js";
+  var $ = function (id) { return document.getElementById(id); };
+  var say = function (t, err) { var m = $("msg"); m.textContent = t; m.className = "msg" + (err ? " err" : ""); };
+  function loadAlt() {
+    return new Promise(function (res, rej) { var s = document.createElement("script"); s.src = SB_ALT; s.onload = res; s.onerror = rej; document.head.appendChild(s); });
+  }
+  function b64(s) { var b = atob(s), a = new Uint8Array(b.length); for (var i = 0; i < b.length; i++) a[i] = b.charCodeAt(i); return a; }
+  async function gunzip(buf) {
+    var ds = new DecompressionStream("gzip");
+    return await new Response(new Blob([buf]).stream().pipeThrough(ds)).text();
+  }
+  async function openApp(sb) {
+    say("Anahtar alınıyor…");
+    var r = await sb.from("app_key").select("k").eq("id", 1).maybeSingle();
+    if (r.error || !r.data) { say(r.error ? "Anahtar okunamadı: " + r.error.message : "Bu hesabın ekrana erişim izni yok.", true); showForm(); return; }
+    say("Ekran açılıyor…");
+    var res = await fetch("app.enc?v=" + BUILD, { cache: "no-cache" });
+    if (!res.ok) { say("Uygulama dosyası indirilemedi (" + res.status + ").", true); return; }
+    var buf = new Uint8Array(await res.arrayBuffer());
+    var key = await crypto.subtle.importKey("raw", b64(r.data.k), { name: "AES-GCM" }, false, ["decrypt"]);
+    var plain;
+    try { plain = await crypto.subtle.decrypt({ name: "AES-GCM", iv: buf.slice(0, 12) }, key, buf.slice(12)); }
+    catch (e) { say("Şifre çözülemedi: anahtar bu sürümle eşleşmiyor.", true); return; }
+    var html = await gunzip(plain);
+    document.open(); document.write(html); document.close();
+  }
+  function showForm() { $("f").hidden = false; $("go").disabled = false; setTimeout(function () { $("em").focus(); }, 30); }
+  async function boot() {
+    if (!window.supabase) { try { await loadAlt(); } catch (e) {} }
+    var C = window.HIBERNIA_CONFIG;
+    if (!window.supabase || !C) { say("Bağlantı kitaplığı yüklenemedi. İnternet bağlantını ya da reklam engelleyiciyi kontrol et.", true); return; }
+    if (!window.DecompressionStream || !window.crypto || !crypto.subtle) { say("Bu tarayıcı çok eski. Chrome, Edge, Firefox ya da Safari'nin güncel sürümünü kullan.", true); return; }
+    var sb = window.supabase.createClient(C.supabaseUrl, C.supabaseKey, { auth: { persistSession: true, autoRefreshToken: false, detectSessionInUrl: false, storageKey: "hibernia-gm-auth" } });
+    var signup = false;
+    $("sw").addEventListener("click", function () {
+      signup = !signup; $("pw2l").hidden = !signup; $("pw2").required = signup;
+      $("pw").autocomplete = signup ? "new-password" : "current-password";
+      $("go").textContent = signup ? "Hesabı oluştur" : "Giriş yap";
+      $("sw").textContent = signup ? "Zaten hesabım var, giriş yap" : "İlk kez mi giriyorsun? Şifreni belirle";
+      say(signup ? "Şifren en az 8 karakter olsun. Bu sayfaya yalnızca izin verilen e-posta kayıt olabilir." : "");
+    });
+    $("f").addEventListener("submit", async function (e) {
+      e.preventDefault();
+      var em = $("em").value.trim(), pw = $("pw").value;
+      if (signup) {
+        if (pw.length < 8) { say("Şifre en az 8 karakter olmalı.", true); return; }
+        if (pw !== $("pw2").value) { say("İki şifre aynı değil.", true); return; }
+        $("go").disabled = true; say("Hesap oluşturuluyor…");
+        var u = await sb.auth.signUp({ email: em, password: pw });
+        if (u.error) {
+          var m = u.error.message || "";
+          say(/already|registered|exists/i.test(m) ? "Bu e-postayla zaten hesap var; giriş yap." : /database|saving|kayıt kapalı/i.test(m) ? "Bu e-postayla kayıt açık değil." : "Hesap oluşturulamadı: " + m, true);
+          $("go").disabled = false; return;
+        }
+        if (!(u.data && u.data.session)) {
+          var t = await sb.auth.signInWithPassword({ email: em, password: pw });
+          if (t.error) { $("go").disabled = false; if (signup) $("sw").click(); say("Hesap oluştu. E-postana gelen onay bağlantısına tıkla, sonra buradan giriş yap."); return; }
+        }
+        $("f").hidden = true; openApp(sb).catch(function (err) { say("Açılamadı: " + (err && err.message || err), true); });
+        return;
+      }
+      $("go").disabled = true; say("Giriş yapılıyor…");
+      var r = await sb.auth.signInWithPassword({ email: em, password: pw });
+      if (r.error) { say(/invalid/i.test(r.error.message) ? "E-posta ya da şifre yanlış." : /confirm/i.test(r.error.message) ? "E-posta henüz onaylanmamış: gelen kutundaki bağlantıya tıkla." : "Giriş yapılamadı: " + r.error.message, true); $("go").disabled = false; return; }
+      $("f").hidden = true; openApp(sb).catch(function (err) { say("Açılamadı: " + (err && err.message || err), true); });
+    });
+    var s = await sb.auth.getSession();
+    if (s.data && s.data.session) openApp(sb).catch(function (err) { say("Açılamadı: " + (err && err.message || err), true); showForm(); });
+    else { say(""); showForm(); }
+  }
+  boot();
+})();
+</script>
+</body>
+</html>
