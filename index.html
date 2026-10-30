@@ -34,7 +34,7 @@ button.link{background:none;color:var(--muted);font:500 14px var(--f-body);paddi
 [hidden]{display:none!important}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
-<script src="config.js?v=0025b99a4302"></script>
+<script src="config.js?v=d38ae85ea9c3"></script>
 </head>
 <body>
 <main class="gate">
@@ -54,7 +54,7 @@ button.link{background:none;color:var(--muted);font:500 14px var(--f-body);paddi
 <script>
 (function () {
   "use strict";
-  var BUILD = "0025b99a4302";
+  var BUILD = "d38ae85ea9c3";
   var SB_ALT = "https://unpkg.com/@supabase/supabase-js@2.117.3/dist/umd/supabase.js";
   var $ = function (id) { return document.getElementById(id); };
   var say = function (t, err) { var m = $("msg"); m.textContent = t; m.className = "msg" + (err ? " err" : ""); };
@@ -66,9 +66,21 @@ button.link{background:none;color:var(--muted);font:500 14px var(--f-body);paddi
     var ds = new DecompressionStream("gzip");
     return await new Response(new Blob([buf]).stream().pipeThrough(ds)).text();
   }
+  // Okuma isteklerinde takılan bağlantıyı 10 saniyede kesip yeniden dener
+  async function tfetch(input, init) {
+    init = init || {};
+    var method = String(init.method || "GET").toUpperCase();
+    if (method !== "GET") return fetch(input, init);
+    for (var i = 0; i < 4; i++) {
+      var ac = new AbortController(), to = setTimeout(function () { ac.abort(); }, 10000);
+      try { var res = await fetch(input, Object.assign({}, init, { signal: ac.signal })); clearTimeout(to); if (i < 3 && res.status >= 502 && res.status <= 504) { await new Promise(function (r) { setTimeout(r, 800 * (i + 1)); }); continue; } return res; }
+      catch (e) { clearTimeout(to); if (i === 3) throw e; await new Promise(function (r) { setTimeout(r, 800 * (i + 1)); }); }
+    }
+  }
   async function openApp(sb) {
     say("Anahtar alınıyor…");
     var r = await sb.from("app_key").select("k").eq("id", 1).maybeSingle();
+    for (var t = 0; t < 3 && r.error && /fetch|network|abort/i.test(r.error.message || ""); t++) { say("Bağlantı yavaş, yeniden deneniyor…"); await new Promise(function (res) { setTimeout(res, 1500); }); r = await sb.from("app_key").select("k").eq("id", 1).maybeSingle(); }
     if (r.error || !r.data) { say(r.error ? "Anahtar okunamadı: " + r.error.message : "Bu hesabın ekrana erişim izni yok.", true); showForm(); return; }
     say("Ekran açılıyor…");
     var res = await fetch("app.enc?v=" + BUILD, { cache: "no-cache" });
@@ -87,7 +99,7 @@ button.link{background:none;color:var(--muted);font:500 14px var(--f-body);paddi
     var C = window.HIBERNIA_CONFIG;
     if (!window.supabase || !C) { say("Bağlantı kitaplığı yüklenemedi. İnternet bağlantını ya da reklam engelleyiciyi kontrol et.", true); return; }
     if (!window.DecompressionStream || !window.crypto || !crypto.subtle) { say("Bu tarayıcı çok eski. Chrome, Edge, Firefox ya da Safari'nin güncel sürümünü kullan.", true); return; }
-    var sb = window.supabase.createClient(C.supabaseUrl, C.supabaseKey, { auth: { persistSession: true, autoRefreshToken: false, detectSessionInUrl: false, storageKey: "hibernia-gm-auth" } });
+    var sb = window.supabase.createClient(C.supabaseUrl, C.supabaseKey, { auth: { persistSession: true, autoRefreshToken: false, detectSessionInUrl: false, storageKey: "hibernia-gm-auth" }, global: { fetch: tfetch } });
     var signup = false;
     $("sw").addEventListener("click", function () {
       signup = !signup; $("pw2l").hidden = !signup; $("pw2").required = signup;
