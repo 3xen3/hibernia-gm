@@ -2,7 +2,7 @@
   "id": "hibernia-gm-baglanti",
   "title": "Hibernia GM Bağlantısı",
   "description": "Hibernia GM Ekranı web sitesi ile Foundry arasında zar, resim gösterme, karşılaşma kurma, karakter ve NPC aktarımı, dosya alışverişi ve Korku eşitlemesi. Özel kullanım içindir; tüm hakları saklıdır.",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "authors": [
     {
       "name": "Hibernia GM"
@@ -20,6 +20,6 @@
   ],
   "url": "https://github.com/3xen3/hibernia-gm",
   "manifest": "https://3xen3.github.io/hibernia-gm/foundry/module.json",
-  "download": "https://3xen3.github.io/hibernia-gm/foundry/hibernia-gm-baglanti-1.0.0.zip",
+  "download": "https://3xen3.github.io/hibernia-gm/foundry/hibernia-gm-baglanti-1.0.1.zip",
   "license": "LICENSE"
 }
