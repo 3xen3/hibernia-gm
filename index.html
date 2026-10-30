@@ -27,6 +27,7 @@ input{font:16px var(--f-body);color:var(--ink);background:var(--bg);border:1px s
 input:focus{outline:2px solid var(--moon);outline-offset:1px;border-color:transparent}
 button{font:600 16px var(--f-body);color:#fff;background:var(--moon);border:0;border-radius:6px;padding:11px 14px;cursor:pointer;margin-top:4px}
 button[disabled]{opacity:.6;cursor:progress}
+.links{display:flex;flex-wrap:wrap;justify-content:space-between;gap:6px 14px}
 button.link{background:none;color:var(--muted);font:500 14px var(--f-body);padding:2px;margin:0;text-decoration:underline;text-underline-offset:3px}
 .msg{min-height:22px;margin:14px 2px 0;font-size:14px;color:var(--muted)}
 .msg.err{color:var(--moon)}
@@ -34,7 +35,7 @@ button.link{background:none;color:var(--muted);font:500 14px var(--f-body);paddi
 [hidden]{display:none!important}
 </style>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.js"></script>
-<script src="config.js?v=5b3d463d316f"></script>
+<script src="config.js?v=183a76d35b87"></script>
 </head>
 <body>
 <main class="gate">
@@ -42,11 +43,11 @@ button.link{background:none;color:var(--muted);font:500 14px var(--f-body);paddi
   <h1>Hibernia</h1>
   <p class="sub">GM ekranı · yalnızca davetli hesap</p>
   <form id="f" hidden autocomplete="on">
-    <label>E-posta<input type="email" id="em" name="email" autocomplete="username" required></label>
-    <label>Şifre<input type="password" id="pw" name="password" autocomplete="current-password" required></label>
+    <label id="eml">E-posta<input type="email" id="em" name="email" autocomplete="username" required></label>
+    <label id="pwl"><span id="pwt">Şifre</span><input type="password" id="pw" name="password" autocomplete="current-password" required></label>
     <label id="pw2l" hidden>Şifre tekrar<input type="password" id="pw2" name="password2" autocomplete="new-password"></label>
     <button id="go" type="submit">Giriş yap</button>
-    <button id="sw" type="button" class="link">İlk kez mi giriyorsun? Şifreni belirle</button>
+    <div class="links"><button id="sw" type="button" class="link">İlk kez mi giriyorsun? Şifreni belirle</button><button id="fg" type="button" class="link">Şifremi unuttum</button></div>
   </form>
   <p class="msg" id="msg" role="status">Açılıyor…</p>
   <p class="foot">Tüm hakları saklıdır. İçerik şifrelidir ve yalnızca yetkili hesapla açılır.</p>
@@ -54,7 +55,7 @@ button.link{background:none;color:var(--muted);font:500 14px var(--f-body);paddi
 <script>
 (function () {
   "use strict";
-  var BUILD = "5b3d463d316f";
+  var BUILD = "183a76d35b87";
   var SB_ALT = "https://unpkg.com/@supabase/supabase-js@2.117.3/dist/umd/supabase.js";
   var $ = function (id) { return document.getElementById(id); };
   var say = function (t, err) { var m = $("msg"); m.textContent = t; m.className = "msg" + (err ? " err" : ""); };
@@ -93,25 +94,55 @@ button.link{background:none;color:var(--muted);font:500 14px var(--f-body);paddi
     var html = await gunzip(plain);
     document.open(); document.write(html); document.close();
   }
-  function showForm() { $("f").hidden = false; $("go").disabled = false; setTimeout(function () { $("em").focus(); }, 30); }
+  var mode = "login";
+  var MSG_SIGNUP = "Şifren en az 8 karakter olsun. Bu sayfaya yalnızca izin verilen e-posta kayıt olabilir.";
+  function setMode(m, msg, err) {
+    mode = m;
+    $("eml").hidden = m === "newpw"; $("em").required = m !== "newpw";
+    $("pwl").hidden = m === "reset"; $("pw").required = m !== "reset";
+    $("pw2l").hidden = !(m === "signup" || m === "newpw"); $("pw2").required = !$("pw2l").hidden;
+    $("pwt").textContent = m === "newpw" ? "Yeni şifre" : "Şifre";
+    $("pw").autocomplete = m === "login" ? "current-password" : "new-password";
+    $("go").textContent = { login: "Giriş yap", signup: "Hesabı oluştur", reset: "Sıfırlama bağlantısı gönder", newpw: "Yeni şifreyi kaydet" }[m];
+    $("sw").textContent = m === "login" ? "İlk kez mi giriyorsun? Şifreni belirle" : "Giriş ekranına dön";
+    $("sw").hidden = m === "newpw"; $("fg").hidden = m !== "login";
+    $("go").disabled = false; say(msg || "", err);
+  }
+  function showForm() { $("f").hidden = false; $("go").disabled = false; setTimeout(function () { (mode === "newpw" ? $("pw") : $("em")).focus(); }, 30); }
   async function boot() {
     if (!window.supabase) { try { await loadAlt(); } catch (e) {} }
     var C = window.HIBERNIA_CONFIG;
     if (!window.supabase || !C) { say("Bağlantı kitaplığı yüklenemedi. İnternet bağlantını ya da reklam engelleyiciyi kontrol et.", true); return; }
     if (!window.DecompressionStream || !window.crypto || !crypto.subtle) { say("Bu tarayıcı çok eski. Chrome, Edge, Firefox ya da Safari'nin güncel sürümünü kullan.", true); return; }
     var sb = window.supabase.createClient(C.supabaseUrl, C.supabaseKey, { auth: { persistSession: true, autoRefreshToken: false, detectSessionInUrl: false, storageKey: "hibernia-gm-auth" }, global: { fetch: tfetch } });
-    var signup = false;
-    $("sw").addEventListener("click", function () {
-      signup = !signup; $("pw2l").hidden = !signup; $("pw2").required = signup;
-      $("pw").autocomplete = signup ? "new-password" : "current-password";
-      $("go").textContent = signup ? "Hesabı oluştur" : "Giriş yap";
-      $("sw").textContent = signup ? "Zaten hesabım var, giriş yap" : "İlk kez mi giriyorsun? Şifreni belirle";
-      say(signup ? "Şifren en az 8 karakter olsun. Bu sayfaya yalnızca izin verilen e-posta kayıt olabilir." : "");
-    });
+    $("sw").addEventListener("click", function () { setMode(mode === "login" ? "signup" : "login", mode === "login" ? MSG_SIGNUP : ""); showForm(); });
+    $("fg").addEventListener("click", function () { setMode("reset", "E-postanı yaz; şifreni yenilemen için sana bir bağlantı gönderilecek."); showForm(); });
     $("f").addEventListener("submit", async function (e) {
       e.preventDefault();
       var em = $("em").value.trim(), pw = $("pw").value;
-      if (signup) {
+      if (mode === "reset") {
+        $("go").disabled = true; say("Gönderiliyor…");
+        var rr = await sb.auth.resetPasswordForEmail(em, { redirectTo: location.origin + location.pathname });
+        $("go").disabled = false;
+        if (rr.error) {
+          var rm = rr.error.message || "";
+          say(/authori[sz]ed|sending|smtp|mail/i.test(rm) ? "Bu adrese mail gönderilemiyor. Yardımcı GM isen masa sahibinden sana geçici şifre vermesini iste." : /rate|limit|security purposes|seconds/i.test(rm) ? "Çok sık istendi; biraz bekleyip yeniden dene." : "Gönderilemedi: " + rm, true);
+          return;
+        }
+        say("Bağlantı gönderildi. Gelen kutunu ve gereksiz klasörünü kontrol et, bağlantıya tıklayıp yeni şifreni belirle.");
+        return;
+      }
+      if (mode === "newpw") {
+        if (pw.length < 8) { say("Şifre en az 8 karakter olmalı.", true); return; }
+        if (pw !== $("pw2").value) { say("İki şifre aynı değil.", true); return; }
+        $("go").disabled = true; say("Kaydediliyor…");
+        var nu = await sb.auth.updateUser({ password: pw });
+        if (nu.error) { $("go").disabled = false; say(/different|same/i.test(nu.error.message) ? "Yeni şifre eskisinden farklı olmalı." : "Şifre değiştirilemedi: " + nu.error.message, true); return; }
+        $("f").hidden = true; say("Şifren değişti.");
+        openApp(sb).catch(function (err) { say("Açılamadı: " + (err && err.message || err), true); });
+        return;
+      }
+      if (mode === "signup") {
         if (pw.length < 8) { say("Şifre en az 8 karakter olmalı.", true); return; }
         if (pw !== $("pw2").value) { say("İki şifre aynı değil.", true); return; }
         $("go").disabled = true; say("Hesap oluşturuluyor…");
@@ -123,7 +154,7 @@ button.link{background:none;color:var(--muted);font:500 14px var(--f-body);paddi
         }
         if (!(u.data && u.data.session)) {
           var t = await sb.auth.signInWithPassword({ email: em, password: pw });
-          if (t.error) { $("go").disabled = false; if (signup) $("sw").click(); say("Hesap oluştu. E-postana gelen onay bağlantısına tıkla, sonra buradan giriş yap."); return; }
+          if (t.error) { setMode("login", "Hesap oluştu. E-postana gelen onay bağlantısına tıkla, sonra buradan giriş yap."); return; }
         }
         $("f").hidden = true; openApp(sb).catch(function (err) { say("Açılamadı: " + (err && err.message || err), true); });
         return;
@@ -133,6 +164,18 @@ button.link{background:none;color:var(--muted);font:500 14px var(--f-body);paddi
       if (r.error) { say(/invalid/i.test(r.error.message) ? "E-posta ya da şifre yanlış." : /confirm/i.test(r.error.message) ? "E-posta henüz onaylanmamış: gelen kutundaki bağlantıya tıkla." : "Giriş yapılamadı: " + r.error.message, true); $("go").disabled = false; return; }
       $("f").hidden = true; openApp(sb).catch(function (err) { say("Açılamadı: " + (err && err.message || err), true); });
     });
+    // Şifre sıfırlama bağlantısından gelindiyse: yeni şifre formu
+    var hp = new URLSearchParams((location.hash || "").replace(/^#/, ""));
+    if (hp.get("access_token") || hp.get("error_code") || hp.get("error_description")) history.replaceState(null, "", location.pathname + location.search);
+    if (hp.get("error_code") || (hp.get("error_description") && !hp.get("access_token"))) {
+      var why = (hp.get("error_code") || "") + " " + (hp.get("error_description") || "");
+      setMode("reset", /expired|invalid/i.test(why) ? "Bağlantının süresi dolmuş ya da daha önce kullanılmış. Yeni bağlantı iste." : "Bağlantı açılamadı: " + why, true); showForm(); return;
+    }
+    if (hp.get("access_token") && hp.get("type") === "recovery") {
+      var ss = await sb.auth.setSession({ access_token: hp.get("access_token"), refresh_token: hp.get("refresh_token") || "" });
+      if (ss.error) { setMode("reset", "Bağlantı geçersiz ya da süresi dolmuş. Yeni bağlantı iste.", true); showForm(); return; }
+      setMode("newpw", "Yeni şifreni belirle (en az 8 karakter)."); showForm(); return;
+    }
     var s = await sb.auth.getSession();
     if (s.data && s.data.session) openApp(sb).catch(function (err) { say("Açılamadı: " + (err && err.message || err), true); showForm(); });
     else { say(""); showForm(); }
